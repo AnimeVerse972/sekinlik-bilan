@@ -1,16 +1,13 @@
 services:
   - type: web
-    name: telegram-bot
+    name: telegram-anime-bot
     env: python
+    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python bot.py
+    startCommand: python main.py
     envVars:
       - key: BOT_TOKEN
-        sync: false
-      - key: FLASK_PORT
-        value: 8080
-    plan: free
-    region: frankfurt
-    branch: main
-    autoDeploy: true
-    pythonVersion: 3.11.9
+        value: your_real_token_here
+    build:
+      environment:
+        pythonVersion: 3.11.9
