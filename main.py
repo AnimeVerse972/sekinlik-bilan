@@ -1,93 +1,82 @@
 import os
-import json
 import logging
-from flask import Flask
-from threading import Thread
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
+import json  # yoki import csv
+from aiogram import Bot, Dispatcher, types
+from aiogram.utils import executor
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from keep_alive import keep_alive
 
-# .env yoki Render'dan token va sozlamalar
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-ADMINS = ['6486825926', '757504100']  # o'zingizni ID kiritasiz
+API_TOKEN = os.environ.get('BOT_TOKEN')
 CHANNELS = ['@AniVerseClip', '@StudioNovaOfficial']
+ADMINS = ['6486825926', '757504100']  # ID shaklida
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher(bot, storage=MemoryStorage())
+bot = Bot(token=API_TOKEN, parse_mode='HTML')
+dp = Dispatcher(bot)
 
-# 📁 JSON'dan anime kodlar bazasini yuklaymiz
-with open("anime_data.json", "r", encoding="utf-8") as f:
-    anime_db = json.load(f)
+# 🔹 Keyboard tugmalar
+def get_admin_keyboard():
+    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.add(types.KeyboardButton("📊 Admin panel"))
+    return keyboard
 
-# ✅ Majburiy obuna tekshiruv
-async def check_subscription(user_id):
+# 🔹 Kanal obuna tekshiruvi
+async def is_subscribed(user_id):
     for channel in CHANNELS:
-        chat_member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
-        if chat_member.status not in ['member', 'creator', 'administrator']:
+        try:
+            member = await bot.get_chat_member(chat_id=channel, user_id=user_id)
+            if member.status in ['left', 'kicked']:
+                return False
+        except Exception:
             return False
     return True
 
-# 🎛️ Start komandasi
+# 🔹 Start komandasi
 @dp.message_handler(commands=['start'])
-async def start_cmd(message: types.Message):
-    user_id = message.from_user.id
-    if not await check_subscription(user_id):
-        btn = types.InlineKeyboardMarkup()
+async def cmd_start(message: types.Message):
+    user_id = str(message.from_user.id)
+
+    if not await is_subscribed(user_id):
+        btn = InlineKeyboardMarkup()
         for ch in CHANNELS:
-            btn.add(types.InlineKeyboardButton(f"➕ Obuna bo'lish", url=f"https://t.me/{ch[1:]}"))
-        btn.add(types.InlineKeyboardButton("✅ Tekshirish", callback_data="check_subs"))
-        await message.answer("📛 Iltimos, quyidagi kanallarga obuna bo‘ling:", reply_markup=btn)
-    else:
-        markup = ReplyKeyboardMarkup(resize_keyboard=True)
-        if str(user_id) in ADMINS:
-            markup.add(KeyboardButton("🔧 Admin panel"))
-        await message.answer("🎬 Anime kodini yuboring:", reply_markup=markup)
-
-# 🔄 Obuna qayta tekshirish
-@dp.callback_query_handler(lambda c: c.data == "check_subs")
-async def callback_check(call: types.CallbackQuery):
-    if await check_subscription(call.from_user.id):
-        await call.message.delete()
-        markup = ReplyKeyboardMarkup(resize_keyboard=True)
-        if str(call.from_user.id) in ADMINS:
-            markup.add(KeyboardButton("🔧 Admin panel"))
-        await call.message.answer("✅ Rahmat! Endi anime kodini yuboring:", reply_markup=markup)
-    else:
-        await call.answer("❌ Hali ham obuna emassiz", show_alert=True)
-
-# 🛠 Admin panel
-@dp.message_handler(lambda message: message.text == "🔧 Admin panel")
-async def admin_panel(message: types.Message):
-    if str(message.from_user.id) in ADMINS:
-        await message.answer("👑 Admin panelga xush kelibsiz.\nHozircha bu yer bo‘sh.")
-
-# 🔎 Kod qidirish
-@dp.message_handler(lambda message: message.text)
-async def handle_anime_code(message: types.Message):
-    code = message.text.strip().lower()
-    if not await check_subscription(message.from_user.id):
-        await start_cmd(message)
+            btn.add(InlineKeyboardButton(f"Obuna bo‘lish: {ch}", url=f"https://t.me/{ch[1:]}"))
+        await message.answer("Botdan foydalanish uchun quyidagi kanallarga obuna bo‘ling:", reply_markup=btn)
         return
 
-    if code in anime_db:
-        await message.answer(f"🔍 Topildi:\n{anime_db[code]}")
+    if user_id in ADMINS:
+        await message.answer("Xush kelibsiz, admin!", reply_markup=get_admin_keyboard())
     else:
-        await message.answer("❗ Kod bo‘yicha ma'lumot topilmadi.")
+        await message.answer("Xush kelibsiz! Kod yuboring:")
 
-# 🌐 Flask server (24/7 hosting uchun)
-app = Flask(__name__)
+# 🔹 Admin panel tugmasi
+@dp.message_handler(lambda message: message.text == "📊 Admin panel")
+async def admin_panel(message: types.Message):
+    if str(message.from_user.id) not in ADMINS:
+        return
+    await message.answer("Bu yerda admin statistikasi yoki tugmalar chiqishi mumkin.")
 
-@app.route('/')
-def index():
-    return "Bot ishlayapti!"
+# 🔹 Anime kodini yuborish
+@dp.message_handler()
+async def handle_code(message: types.Message):
+    code = message.text.strip().lower()
 
-def run():
-    app.run(host='0.0.0.0', port=8080)
+    try:
+        with open("data.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        await message.reply("Ma'lumotlar yuklab bo‘lmadi.")
+        return
 
-def keep_alive():
-    Thread(target=run).start()
+    if code in data:
+        await message.reply(data[code])
+    else:
+        await message.reply("Bunday kod topilmadi!")
 
-# ▶️ Botni ishga tushirish
+# 🔹 Flask orqali botni doimiy yoqish
+keep_alive()
+
+# 🔹 Logging
+logging.basicConfig(level=logging.INFO)
+
+# 🔹 Botni ishga tushirish
 if __name__ == '__main__':
-    keep_alive()
     executor.start_polling(dp, skip_updates=True)
