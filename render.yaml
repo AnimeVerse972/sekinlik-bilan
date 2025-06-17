@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: telegram-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: FLASK_PORT
+        value: 8080
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeploy: true
+    pythonVersion: 3.11.9
