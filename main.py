@@ -1,19 +1,17 @@
 import os
 import asyncio
 from aiogram import Bot, Dispatcher, types
-from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, Message, CallbackQuery
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.dispatcher.filters import CommandStart
+from aiogram.dispatcher.router import Router
+from aiogram.dispatcher.dispatcher import Dispatcher as LegacyDispatcher
 
-# Token va kanal nomi
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_USERNAME = "@SIZNING_KANAL"  # <-- o'zingizning kanal username'ini yozing
+CHANNEL_USERNAME = "@AniVerseClip"
 
-# Bot va Dispatcher
-bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher()
 
-# Obuna tekshiruvchi funksiya
 async def is_user_subscribed(user_id: int) -> bool:
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=user_id)
@@ -21,17 +19,14 @@ async def is_user_subscribed(user_id: int) -> bool:
     except:
         return False
 
-# Inline tugmalar
 def subscribe_keyboard():
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+    return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📢 Kanalga obuna bo‘lish", url=f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}")],
         [InlineKeyboardButton(text="✅ Tekshirish", callback_data="check_sub")]
     ])
-    return keyboard
 
-# /start komandasi
-@dp.message(CommandStart())
-async def start_handler(message: Message):
+@dp.message_handler(CommandStart())
+async def start_handler(message: types.Message):
     if not await is_user_subscribed(message.from_user.id):
         await message.answer(
             f"👋 Salom, {message.from_user.full_name}!\n\n"
@@ -41,15 +36,13 @@ async def start_handler(message: Message):
     else:
         await message.answer("✅ Siz kanalga obuna bo‘lgansiz!\nBotdan foydalanishingiz mumkin.")
 
-# Tekshirish callback tugmasi
-@dp.callback_query(lambda c: c.data == "check_sub")
-async def check_subscription(callback: CallbackQuery):
-    if await is_user_subscribed(callback.from_user.id):
-        await callback.message.edit_text("✅ Siz kanalga obuna bo‘lgansiz!\nBotdan foydalanishingiz mumkin.")
+@dp.callback_query_handler(lambda c: c.data == "check_sub")
+async def check_subscription(callback_query: types.CallbackQuery):
+    if await is_user_subscribed(callback_query.from_user.id):
+        await callback_query.message.edit_text("✅ Siz kanalga obuna bo‘lgansiz!\nBotdan foydalanishingiz mumkin.")
     else:
-        await callback.answer("❌ Hali obuna bo‘lmagansiz!", show_alert=True)
+        await callback_query.answer("❌ Hali obuna bo‘lmagansiz!", show_alert=True)
 
-# Botni ishga tushurish
 async def main():
     await dp.start_polling(bot)
 
